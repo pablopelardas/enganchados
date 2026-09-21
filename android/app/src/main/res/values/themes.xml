@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- El tema real lo pone Compose; esto es solo para que la ventana
+         arranque oscura y no pegue un flash blanco al abrir. -->
+    <style name="Theme.Enganchados" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#14161A</item>
+        <item name="android:statusBarColor">#1C1F26</item>
+        <item name="android:navigationBarColor">#1C1F26</item>
+    </style>
+</resources>

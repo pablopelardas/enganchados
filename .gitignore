@@ -1,0 +1,44 @@
+# --- Lo pesado y lo derivado no va al repo ---
+
+# Entorno de Python (se regenera con instalar.ps1)
+.venv/
+__pycache__/
+*.pyc
+
+# Audio bajado de YouTube: NUNCA se versiona.
+# Son archivos de terceros y ademas pesan cientos de MB.
+musica/
+
+# Todo lo que sale de renderizar se regenera desde la receta
+salida/
+
+# Cosas del editor / sistema
+.DS_Store
+Thumbs.db
+
+# --- Android ---
+android/.gradle/
+android/build/
+android/app/build/
+android/local.properties
+android/.idea/
+android/gradle/
+android/gradlew
+android/gradlew.bat
+*.apk
+*.keystore
+*.jks
+keystore.properties
+
+# --- Tus enganchados ---
+# Son tuyos: listas, recetas y titulos no van a un repo publico. La app crea
+# estas carpetas sola la primera vez.
+sets/
+recetas/
+
+# --- Configuracion local de herramientas ---
+.claude/
+
+# --- Salidas de Android ---
+android/app/release/
+android/.kotlin/

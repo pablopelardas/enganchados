@@ -1,0 +1,332 @@
+/* Misma paleta que la app de Android: tienen que sentirse la misma
+   herramienta aunque sean dos implementaciones distintas. */
+:root {
+  --acento: #ffb340;
+  --acento-fuerte: #ff9500;
+  --fondo: #14161a;
+  --panel: #1c1f26;
+  --panel-alto: #232732;
+  --borde: #2e3341;
+  --texto: #e4e7ee;
+  --tenue: #8a92a6;
+  --ok: #4ade80;
+  --mal: #f87171;
+  --sobre-acento: #1a1206;
+  --radio: 12px;
+  --barra: 56px;
+  --tabs: 64px;
+  --ancho: 760px;
+  color-scheme: dark;
+}
+
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; }
+
+body {
+  background: var(--fondo);
+  color: var(--texto);
+  font: 15px/1.45 ui-sans-serif, system-ui, "Segoe UI", Roboto, sans-serif;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* La app es una columna, como en el celular. En pantallas grandes queda
+   centrada: estirarla a 1920px haria las filas ilegibles. */
+#app {
+  max-width: var(--ancho);
+  margin: 0 auto;
+  min-height: 100%;
+  background: var(--fondo);
+  border-inline: 1px solid var(--borde);
+}
+
+svg { width: 22px; height: 22px; fill: none; stroke: currentColor;
+      stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
+/* ================================================================ barra */
+
+#barra {
+  position: sticky; top: 0; z-index: 10;
+  height: var(--barra);
+  display: flex; align-items: center; gap: 8px;
+  padding: 0 8px 0 16px;
+  background: var(--panel);
+  border-bottom: 1px solid var(--borde);
+}
+
+.barra-titulos { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+#titulo { margin: 0; font-size: 18px; font-weight: 600;
+          white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+
+.estado {
+  all: unset; cursor: pointer;
+  font-size: 12px; color: var(--acento);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.estado:hover { text-decoration: underline; }
+
+#progreso { position: sticky; top: var(--barra); z-index: 10; height: 3px; }
+#progreso > div { height: 100%; width: 0; background: var(--acento); transition: width .25s; }
+
+/* =============================================================== paneles */
+
+#contenido { padding: 16px 16px calc(var(--tabs) + 24px); }
+.panel { display: none; }
+.panel.activa { display: block; }
+
+.centro { max-width: 420px; margin: 8vh auto 0; text-align: center; }
+.marca { color: var(--acento); font-size: 28px; margin: 0 0 8px; }
+.pila { display: flex; flex-direction: column; gap: 12px; margin-top: 28px; }
+
+.vacio { color: var(--tenue); text-align: center; padding: 48px 24px; }
+
+/* ============================================================== controles */
+
+button, .boton {
+  font: inherit; color: var(--texto);
+  background: var(--panel-alto);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  min-height: 48px; padding: 0 18px;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  text-decoration: none;
+}
+button:disabled { opacity: .4; cursor: not-allowed; }
+
+.primario { background: var(--acento); color: var(--sobre-acento);
+            border-color: var(--acento); font-weight: 600; }
+.primario:hover:not(:disabled) { background: var(--acento-fuerte); }
+.contorno { background: transparent; }
+.contorno:hover:not(:disabled) { border-color: var(--acento); }
+.texto { background: none; border-color: transparent; color: var(--tenue); }
+.texto:hover:not(:disabled) { color: var(--texto); }
+.grande { min-height: 56px; font-size: 16px; }
+.ancho { width: 100%; }
+
+.icono {
+  background: none; border: none; color: var(--tenue);
+  min-height: 44px; width: 44px; padding: 0; border-radius: 50%;
+}
+.icono:hover:not(:disabled) { color: var(--texto); background: var(--panel-alto); }
+.icono.grande { width: 52px; min-height: 52px; }
+.icono.grande svg { width: 26px; height: 26px; }
+
+/* Confirmacion en dos toques: confirm() nativo no sirve, hay navegadores
+   y paneles embebidos que lo suprimen y la accion "no hace nada". */
+.armado { background: var(--mal) !important; color: #1a0808 !important;
+          border-color: var(--mal) !important; font-weight: 600; }
+
+input, textarea {
+  font: inherit; color: var(--texto);
+  background: var(--panel);
+  border: 1px solid var(--borde);
+  border-radius: var(--radio);
+  padding: 12px 14px; min-height: 48px; width: 100%;
+}
+input:focus, textarea:focus { outline: none; border-color: var(--acento); }
+input[type=number] { width: 96px; min-height: 42px; padding: 8px 10px; }
+
+input[type=range] { accent-color: var(--acento); width: 100%; min-height: 32px; padding: 0;
+                    background: none; border: none; }
+
+.fila-botones { display: flex; gap: 8px; margin: 12px 0; }
+.fila-botones > * { flex: 1; }
+.fila-campos { display: flex; gap: 16px; margin: 8px 0 4px; color: var(--tenue); font-size: 14px; }
+.fila-campos label { display: flex; align-items: center; gap: 8px; }
+
+.tenue { color: var(--tenue); }
+.chico { font-size: 12.5px; }
+.acento { color: var(--acento); }
+.mono { font-family: ui-monospace, "Cascadia Code", Consolas, monospace; }
+p.chico { margin: 6px 0 12px; }
+
+hr { border: none; border-top: 1px solid var(--borde); margin: 20px 0 12px; }
+
+code { background: var(--panel-alto); padding: 1px 5px; border-radius: 4px; font-size: 12px; }
+
+.tarjeta {
+  background: var(--panel); border: 1px solid var(--borde);
+  border-radius: var(--radio); padding: 16px;
+  display: flex; flex-direction: column; gap: 4px;
+  margin-bottom: 12px;
+}
+
+/* ================================================================= listas */
+
+.lista { list-style: none; margin: 0; padding: 0; }
+
+#filas li {
+  display: flex; align-items: center; gap: 4px;
+  padding: 10px 4px; border-bottom: 1px solid var(--borde);
+}
+.fila-num { width: 30px; flex: none; color: var(--tenue);
+            font: 13px ui-monospace, Consolas, monospace; }
+.fila-textos { flex: 1; min-width: 0; }
+.fila-titulo { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical;
+               overflow: hidden; font-size: 15px; }
+.fila-estado { font-size: 12px; display: flex; gap: 10px; margin-top: 2px; }
+.fila-estado .si { color: var(--ok); }
+.fila-estado .no { color: var(--mal); }
+#filas .icono { width: 40px; min-height: 40px; flex: none; }
+#filas .icono.buscar { color: var(--acento); }
+#filas .icono.quitar { color: var(--mal); }
+#filas .icono.quitar.armado { border-radius: var(--radio); width: auto; padding: 0 10px; }
+
+details#crudo {
+  margin-top: 24px; border: 1px solid var(--borde);
+  border-radius: var(--radio); padding: 0 14px;
+}
+details#crudo[open] { padding-bottom: 14px; }
+details#crudo summary { cursor: pointer; padding: 14px 0; color: var(--tenue); font-size: 14px; }
+details#crudo textarea { min-height: 220px; font: 13px/1.6 ui-monospace, Consolas, monospace;
+                         margin-bottom: 10px; resize: vertical; }
+
+/* ================================================================= tramos */
+
+#btn-analizar { margin-bottom: 14px; }
+
+.chips { display: flex; gap: 8px; overflow-x: auto; padding-bottom: 6px; margin-bottom: 12px;
+         scrollbar-width: thin; }
+.chips button {
+  flex: none; min-height: 34px; min-width: 42px; padding: 0 12px;
+  border-radius: 10px; font-size: 14px;
+}
+.chips button.activa { background: var(--acento); color: var(--sobre-acento);
+                       border-color: var(--acento); font-weight: 600; }
+
+.cabecera-tema { display: flex; align-items: center; gap: 2px; margin-bottom: 12px; }
+.cabecera-textos { flex: 1; min-width: 0; display: flex; flex-direction: column; }
+.cabecera-textos strong { display: -webkit-box; -webkit-line-clamp: 2;
+                          -webkit-box-orient: vertical; overflow: hidden; }
+
+#onda {
+  background: var(--panel); border-radius: var(--radio);
+  min-height: 150px; overflow: hidden; touch-action: pan-y;
+}
+
+/* Las manijas del tramo: la pastilla con rayitas es la convencion
+   universal de "esto se agarra". WaveSurfer dibuja dentro de un shadow
+   DOM, por eso se alcanzan con ::part. */
+#onda div::part(region) { border-left: none; border-right: none; }
+#onda div::part(region-handle) {
+  width: 16px !important;
+  border: none !important;
+  background:
+    linear-gradient(var(--sobre-acento), var(--sobre-acento)) center 38% / 1.5px 18px no-repeat,
+    linear-gradient(var(--sobre-acento), var(--sobre-acento)) calc(50% - 3px) 50% / 1.5px 18px no-repeat,
+    linear-gradient(var(--sobre-acento), var(--sobre-acento)) calc(50% + 3px) 50% / 1.5px 18px no-repeat,
+    linear-gradient(var(--acento-fuerte), var(--acento-fuerte)) center / 16px 46px no-repeat,
+    linear-gradient(var(--acento-fuerte), var(--acento-fuerte)) center / 3px 100% no-repeat !important;
+  border-radius: 8px;
+  cursor: ew-resize;
+}
+#onda div::part(region-handle-left) { transform: translateX(-8px); }
+#onda div::part(region-handle-right) { transform: translateX(8px); }
+
+#valores { margin: 12px 0 0; font-size: 14px; }
+
+/* ================================================================== armar */
+
+.deslizador { display: flex; flex-direction: column; gap: 4px; color: var(--tenue);
+              font-size: 14px; margin: 16px 0; }
+.deslizador b { color: var(--texto); }
+
+#reproductor { margin-top: 16px; }
+.tiempos { display: flex; justify-content: space-between; }
+.controles { display: flex; justify-content: center; align-items: center; gap: 20px; margin: 8px 0; }
+.play {
+  width: 64px; height: 64px; min-height: 64px; padding: 0; border-radius: 50%;
+  background: var(--acento); border-color: var(--acento); color: var(--sobre-acento);
+}
+.play svg { width: 30px; height: 30px; fill: currentColor; stroke: none; }
+#descargar-m4a, #descargar-zip { margin-top: 8px; }
+
+/* ================================================================== tabs */
+
+#tabs {
+  position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+  max-width: var(--ancho); margin: 0 auto;
+  height: calc(var(--tabs) + env(safe-area-inset-bottom));
+  padding-bottom: env(safe-area-inset-bottom);
+  display: flex; background: var(--panel); border-top: 1px solid var(--borde);
+}
+#tabs button {
+  flex: 1; flex-direction: column; gap: 2px;
+  background: none; border: none; border-radius: 0;
+  color: var(--tenue); font-size: 12px; min-height: 0;
+}
+#tabs button svg { padding: 2px 16px; box-sizing: content-box; border-radius: 16px; }
+#tabs button.activa { color: var(--texto); }
+#tabs button.activa svg { background: rgba(255, 179, 64, .22); color: var(--acento); }
+#tabs[hidden] { display: none; }
+
+/* ================================================================= hojas */
+
+/* Hojas que suben desde abajo, como el ModalBottomSheet de Android. */
+dialog.hoja {
+  margin: auto auto 0; padding: 0; border: none;
+  width: 100%; max-width: var(--ancho); max-height: 88vh;
+  background: var(--panel); color: var(--texto);
+  border-radius: 20px 20px 0 0;
+}
+dialog.hoja[open] { animation: subir .22s ease-out; }
+dialog.hoja::backdrop { background: rgba(0, 0, 0, .55); }
+@keyframes subir { from { transform: translateY(40px); opacity: 0; } }
+
+.hoja-cuerpo { padding: 8px 16px 16px; display: flex; flex-direction: column;
+               max-height: 88vh; }
+.hoja-agarre { width: 36px; height: 4px; border-radius: 2px; background: var(--borde);
+               margin: 4px auto 12px; }
+.hoja h3 { margin: 0 0 4px; font-size: 18px; }
+.hoja-pie { display: flex; flex-direction: column; gap: 4px; padding-top: 8px; }
+
+.campo-buscar { display: flex; gap: 6px; margin: 12px 0 8px; align-items: center; }
+.campo-buscar .icono { color: var(--acento); flex: none; }
+
+.barra-carga { height: 3px; background: linear-gradient(90deg, transparent, var(--acento), transparent)
+               0 0 / 40% 100% no-repeat; animation: cargar 1s linear infinite; }
+@keyframes cargar { from { background-position: -40% 0; } to { background-position: 140% 0; } }
+
+.resultados { overflow-y: auto; flex: 1; min-height: 0; }
+.resultados li {
+  display: flex; align-items: center; gap: 10px;
+  padding: 6px; border-radius: 10px; cursor: pointer;
+}
+.resultados li:hover { background: var(--panel-alto); }
+.resultados li.elegido { background: rgba(255, 179, 64, .12); }
+.resultados img { width: 96px; height: 54px; object-fit: cover; border-radius: 6px; flex: none;
+                  background: var(--panel-alto); }
+.resultados .datos { flex: 1; min-width: 0; }
+.resultados .t { font-size: 14px; display: -webkit-box; -webkit-line-clamp: 2;
+                 -webkit-box-orient: vertical; overflow: hidden; }
+.resultados .m { font-size: 12px; color: var(--tenue); white-space: nowrap;
+                 overflow: hidden; text-overflow: ellipsis; }
+.resultados input[type=checkbox] { width: 22px; height: 22px; min-height: 0; accent-color: var(--acento);
+                                   flex: none; }
+.resultados .usar { min-height: 38px; padding: 0 14px; flex: none; }
+.resultados .fin { justify-content: center; color: var(--tenue); font-size: 12px; cursor: default; }
+.resultados .fin:hover { background: none; }
+
+#lista-sets li { display: flex; align-items: center; gap: 8px; border-bottom: 1px solid var(--borde); }
+#lista-sets .abrir { flex: 1; justify-content: flex-start; background: none; border: none;
+                     flex-direction: column; align-items: flex-start; gap: 0; padding: 10px 4px; }
+#lista-sets .abrir small { color: var(--tenue); font-size: 12px; }
+#lista-sets .actual { color: var(--acento); }
+#lista-sets .borrar { color: var(--mal); }
+
+#log { background: var(--fondo); border-radius: 10px; padding: 12px; margin: 8px 0;
+       max-height: 50vh; overflow: auto; font: 12px/1.6 ui-monospace, Consolas, monospace;
+       color: var(--tenue); white-space: pre-wrap; }
+
+/* ================================================================= aviso */
+
+#aviso {
+  position: fixed; left: 50%; bottom: calc(var(--tabs) + 16px);
+  transform: translate(-50%, 20px); opacity: 0; pointer-events: none;
+  max-width: min(92vw, 520px);
+  background: var(--panel-alto); border: 1px solid var(--borde);
+  padding: 12px 16px; border-radius: 10px; font-size: 14px;
+  box-shadow: 0 8px 30px rgba(0, 0, 0, .5);
+  transition: opacity .2s, transform .2s; z-index: 20;
+}
+#aviso.visible { opacity: 1; transform: translate(-50%, 0); }

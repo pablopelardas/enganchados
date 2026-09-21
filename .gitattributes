@@ -1,0 +1,14 @@
+# Saltos de linea por tipo de archivo, sin depender de la config de quien
+# commitea. Un script de bash con saltos de Windows falla en Mac con un
+# "bad interpreter" incomprensible; un .bat con saltos de Unix puede fallar
+# en Windows.
+*            text=auto
+*.sh         text eol=lf
+*.command    text eol=lf
+*.bat        text eol=crlf
+*.ps1        text eol=crlf
+
+# Binarios: nunca tocarlos
+*.png  binary
+*.jpg  binary
+*.jar  binary

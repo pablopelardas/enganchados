@@ -1,0 +1,221 @@
+<!doctype html>
+<html lang="es">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#1C1F26">
+  <title>Enganchados</title>
+  <link rel="stylesheet" href="estilos.css">
+</head>
+<body>
+
+<div id="app">
+
+  <header id="barra">
+    <div class="barra-titulos">
+      <h1 id="titulo">Enganchados</h1>
+      <button id="estado" class="estado" hidden title="Ver el detalle"></button>
+    </div>
+    <button id="abrir-sets" class="icono" aria-label="Enganchados">
+      <svg viewBox="0 0 24 24"><path d="M3 6h18M3 12h18M3 18h18"/></svg>
+    </button>
+  </header>
+  <div id="progreso"><div></div></div>
+
+  <main id="contenido">
+
+    <!-- ================================================ bienvenida -->
+    <section id="bienvenida" class="panel">
+      <div class="centro">
+        <h2 class="marca">Enganchados</h2>
+        <p class="tenue">Buscá los temas, elegí qué pedazo suena de cada uno, y armá el enganchado.</p>
+        <form id="form-nuevo" class="pila">
+          <input id="nombre-nuevo" placeholder="nombre, ej: carnaval" autocomplete="off" required>
+          <button class="primario grande">Empezar uno nuevo</button>
+        </form>
+        <div id="bienvenida-lista"></div>
+      </div>
+    </section>
+
+    <!-- ===================================================== temas -->
+    <section id="p-temas" class="panel">
+      <div class="fila-botones">
+        <button id="btn-bajar" class="primario">Bajar</button>
+        <button id="btn-agregar" class="contorno">+ Agregar</button>
+      </div>
+      <ol id="filas" class="lista"></ol>
+
+      <details id="crudo">
+        <summary>Editar la lista como texto</summary>
+        <p class="tenue chico">
+          Una línea por tema, en orden: un link de YouTube o
+          <code>ytsearch1:"artista tema"</code>. Sirve para pegar muchos de una.
+        </p>
+        <textarea id="editor-crudo" spellcheck="false"></textarea>
+        <button id="guardar-crudo" class="contorno">Guardar texto</button>
+      </details>
+    </section>
+
+    <!-- ==================================================== tramos -->
+    <section id="p-tramos" class="panel">
+      <button id="btn-analizar" class="primario ancho"></button>
+
+      <div id="sin-tramos" class="vacio"></div>
+
+      <div id="editor-tramo" hidden>
+        <div id="chips" class="chips"></div>
+
+        <div class="cabecera-tema">
+          <div class="cabecera-textos">
+            <strong id="tema-titulo"></strong>
+            <span id="tema-info" class="tenue chico"></span>
+          </div>
+          <button id="mover-antes" class="icono" aria-label="Mover antes">
+            <svg viewBox="0 0 24 24"><path d="M15 6l-6 6 6 6"/></svg>
+          </button>
+          <span id="tema-pos" class="mono tenue chico"></span>
+          <button id="mover-despues" class="icono" aria-label="Mover después">
+            <svg viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
+          </button>
+        </div>
+
+        <div id="onda"></div>
+        <p class="tenue chico">
+          Estirá desde las manijas · arrastrá desde el medio para mover el tramo entero
+        </p>
+
+        <div id="valores" class="mono acento"></div>
+
+        <div class="fila-campos">
+          <label>Desde <input id="campo-inicio" type="number" min="0" step="0.1"></label>
+          <label>Hasta <input id="campo-fin" type="number" min="0" step="0.1"></label>
+        </div>
+
+        <div class="fila-botones">
+          <button id="tocar-tramo" class="primario">▶ Tramo</button>
+          <button id="tocar-entero" class="contorno">▶ Tema entero</button>
+        </div>
+
+        <button id="pegar-compas" class="contorno ancho">Ajustar a compases enteros</button>
+        <p class="tenue chico">
+          Redondea el largo para que el corte caiga donde termina una frase
+          musical, y no a mitad de un compás. El arranque no se mueve.
+        </p>
+
+        <button id="re-analizar" class="texto ancho">Re-analizar solo este</button>
+      </div>
+    </section>
+
+    <!-- ===================================================== armar -->
+    <section id="p-armar" class="panel">
+      <div class="tarjeta">
+        <strong id="armar-nombre"></strong>
+        <span id="armar-info" class="tenue chico"></span>
+      </div>
+
+      <label class="deslizador">
+        <span>Cruce: <b id="cruce-valor"></b></span>
+        <input id="cruce" type="range" min="0" max="12" step="0.5">
+      </label>
+
+      <button id="btn-armar" class="primario ancho grande">Armar el enganchado</button>
+
+      <div id="reproductor" class="tarjeta" hidden>
+        <strong>Escuchar el resultado</strong>
+        <input id="mezcla-pos" type="range" min="0" max="1" step="0.1" value="0">
+        <div class="tiempos mono tenue chico">
+          <span id="mezcla-ahora">0:00</span><span id="mezcla-total">0:00</span>
+        </div>
+        <div class="controles">
+          <button id="cruce-anterior" class="icono grande" aria-label="Cruce anterior">
+            <svg viewBox="0 0 24 24"><path d="M6 5v14M18 6l-9 6 9 6z"/></svg>
+          </button>
+          <button id="mezcla-play" class="play" aria-label="Escuchar">
+            <svg viewBox="0 0 24 24"><path id="icono-play" d="M8 5l11 7-11 7z"/></svg>
+          </button>
+          <button id="cruce-siguiente" class="icono grande" aria-label="Próximo cruce">
+            <svg viewBox="0 0 24 24"><path d="M18 5v14M6 6l9 6-9 6z"/></svg>
+          </button>
+        </div>
+        <p id="cruces-ayuda" class="tenue chico"></p>
+        <audio id="audio-mezcla" preload="metadata"></audio>
+        <a id="descargar-m4a" class="boton contorno ancho" download>Descargar m4a</a>
+      </div>
+
+      <hr>
+      <p class="tenue chico">
+        Para ponerle un beat encima hace falta llevar los pedazos a un editor.
+        El ZIP trae cada tramo suelto más el proyecto de Reaper armado.
+      </p>
+      <button id="btn-stems" class="contorno ancho">Exportar stems + Reaper</button>
+      <a id="descargar-zip" class="boton primario ancho" download hidden>Descargar ZIP</a>
+    </section>
+  </main>
+
+  <nav id="tabs">
+    <button data-panel="temas" class="activa">
+      <svg viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h10"/></svg>Temas
+    </button>
+    <button data-panel="tramos">
+      <svg viewBox="0 0 24 24"><path d="M4 8h10M18 8h2M4 16h4M12 16h8"/><circle cx="16" cy="8" r="2"/><circle cx="10" cy="16" r="2"/></svg>Tramos
+    </button>
+    <button data-panel="armar">
+      <svg viewBox="0 0 24 24"><path d="M4 14v-4M8 18V6M12 15V9M16 20V4M20 14v-4"/></svg>Armar
+    </button>
+  </nav>
+</div>
+
+<!-- ===================================================== buscador -->
+<dialog id="hoja-buscar" class="hoja">
+  <div class="hoja-cuerpo">
+    <div class="hoja-agarre"></div>
+    <h3 id="buscar-titulo"></h3>
+    <p id="buscar-ayuda" class="tenue chico"></p>
+    <form id="form-buscar" class="campo-buscar">
+      <input id="consulta" placeholder="artista, tema o banda" autocomplete="off" enterkeyhint="search">
+      <button class="icono" aria-label="Buscar">
+        <svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M20 20l-4-4"/></svg>
+      </button>
+    </form>
+    <div id="buscando" class="barra-carga" hidden></div>
+    <ul id="resultados" class="lista resultados"></ul>
+    <div class="hoja-pie">
+      <button id="agregar-elegidos" class="primario ancho grande" hidden></button>
+      <button id="cerrar-buscar" class="texto ancho">Cancelar</button>
+    </div>
+  </div>
+</dialog>
+
+<!-- =============================================== enganchados -->
+<dialog id="hoja-sets" class="hoja">
+  <div class="hoja-cuerpo">
+    <div class="hoja-agarre"></div>
+    <h3>Tus enganchados</h3>
+    <ul id="lista-sets" class="lista"></ul>
+    <form id="form-nuevo-hoja" class="campo-buscar">
+      <input id="nombre-nuevo-hoja" placeholder="nuevo enganchado" autocomplete="off">
+      <button class="icono" aria-label="Crear">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </form>
+    <hr>
+    <button id="actualizar-ytdlp" class="texto ancho">Actualizar yt-dlp</button>
+    <button id="cerrar-sets" class="texto ancho">Cerrar</button>
+  </div>
+</dialog>
+
+<!-- ================================================ detalle log -->
+<dialog id="hoja-log" class="hoja">
+  <div class="hoja-cuerpo">
+    <div class="hoja-agarre"></div>
+    <h3 id="log-titulo">Detalle</h3>
+    <pre id="log"></pre>
+    <button id="cerrar-log" class="texto ancho">Cerrar</button>
+  </div>
+</dialog>
+
+<div id="aviso" role="status"></div>
+
+<script type="module" src="app.js"></script>
+</body>
+</html>
