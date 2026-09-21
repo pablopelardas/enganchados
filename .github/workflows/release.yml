@@ -1,0 +1,76 @@
+# Arma la app de escritorio para cada sistema y la publica como release.
+#
+# Se dispara al subir una etiqueta de version:
+#     git tag v0.2.0 && git push origin v0.2.0
+#
+# Tambien se puede correr a mano desde la pestana Actions (sin publicar),
+# para probar que todo arma.
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  construir:
+    strategy:
+      # que un sistema falle no cancele a los otros
+      fail-fast: false
+      matrix:
+        include:
+          - os: windows-latest
+            nombre: windows
+          - os: macos-14            # Apple Silicon
+            nombre: macos-apple
+          - os: macos-15-intel      # ultima imagen Intel de GitHub (hasta ago 2027)
+            nombre: macos-intel
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Dependencias
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt -r empaquetar/requirements.txt
+
+      - name: Inno Setup
+        if: runner.os == 'Windows'
+        run: choco install innosetup --no-progress -y
+
+      - name: Armar
+        run: python empaquetar/construir.py --version "${{ github.ref_name }}"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.nombre }}
+          path: dist/release/*
+          if-no-files-found: error
+
+  publicar:
+    needs: construir
+    # publica lo que haya armado aunque un sistema haya fallado
+    if: ${{ !cancelled() && startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/download-artifact@v4
+        with:
+          path: artefactos
+          merge-multiple: true
+
+      - name: Crear release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release create "${{ github.ref_name }}" artefactos/* \
+            --title "Enganchados ${{ github.ref_name }}" \
+            --notes-file empaquetar/NOTAS_RELEASE.md

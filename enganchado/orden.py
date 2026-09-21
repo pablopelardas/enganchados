@@ -12,7 +12,9 @@ el server no tiene por que cargar librosa para listar archivos.
 import re
 from pathlib import Path
 
-RAIZ = Path(__file__).resolve().parent.parent
+# La raiz de los DATOS: el repo al correr desde el codigo, o
+# Documentos/Enganchados en la app empaquetada. Ver rutas.py.
+from rutas import DATOS as RAIZ
 AUDIO = {".m4a", ".opus", ".webm", ".mp3", ".mp4"}
 
 

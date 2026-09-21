@@ -4,6 +4,11 @@ Analiza los temas de un set y PROPONE una receta de enganchado.
 No mezcla nada: solo mide y sugiere. La receta que escribe es un JSON
 pensado para que vos lo edites a mano antes de renderizar.
 
+Es el mismo algoritmo que la app de Android, portado a numpy. Antes usaba
+librosa, que arrastra scipy, numba y llvmlite: cientos de MB solo para
+medir el BPM, inviables para empaquetar la app. Asi, ademas, celular y
+escritorio analizan igual.
+
 Uso:
     python enganchado/analizar.py 01-carnaval-carioca
     python enganchado/analizar.py 01-carnaval-carioca --duracion 45
@@ -12,7 +17,6 @@ import argparse
 import json
 import subprocess
 import sys
-import tempfile
 from pathlib import Path
 
 # La consola de Windows es cp1252 y varios titulos traen emojis/acentos.
@@ -22,40 +26,59 @@ for flujo in (sys.stdout, sys.stderr):
     except AttributeError:
         pass
 
-import librosa
 import numpy as np
 
 from orden import archivos_ordenados, id_de, sin_id
+from rutas import SIN_VENTANA, herramienta
 
 SR = 22050          # suficiente para detectar beats; mas alto solo tarda mas
-HOP = 512
+HOP = 512           # ~43 cuadros por segundo
 COMPAS = 4          # 4/4 — vale para todos los generos de estos sets
+BPM_MIN, BPM_MAX = 82.0, 164.0
 
-RAIZ = Path(__file__).resolve().parent.parent
-
-# Perfiles de Krumhansl-Schmuckler para estimar tonalidad
-PERFIL_MAYOR = np.array([6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88])
-PERFIL_MENOR = np.array([6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17])
-NOTAS = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"]
+# La raiz de los DATOS: el repo al correr desde el codigo, o
+# Documentos/Enganchados en la app empaquetada. Ver rutas.py.
+from rutas import DATOS as RAIZ
 
 
-def decodificar(origen: Path) -> str:
-    """m4a/opus -> wav mono temporal. librosa 1.0 no lee AAC."""
-    tmp = tempfile.NamedTemporaryFile(suffix=".wav", delete=False)
-    tmp.close()
-    subprocess.run(
-        ["ffmpeg", "-v", "error", "-y", "-i", str(origen),
-         "-ac", "1", "-ar", str(SR), tmp.name],
-        check=True,
+def envolvente(archivo: Path) -> tuple[np.ndarray, float]:
+    """Energia (RMS) por cuadro de HOP muestras, y la duracion en segundos.
+
+    ffmpeg decodifica a PCM mono y se lee DE A PEDAZOS: el tema entero nunca
+    esta en memoria. Es lo unico que necesita el analisis.
+    """
+    proc = subprocess.Popen(
+        [herramienta("ffmpeg"), "-v", "error", "-i", str(archivo),
+         "-ac", "1", "-ar", str(SR), "-f", "s16le", "-"],
+        stdout=subprocess.PIPE, stderr=subprocess.DEVNULL, **SIN_VENTANA,
     )
-    return tmp.name
+    cuadro = HOP * 2                      # bytes por cuadro (16 bits)
+    partes, resto, muestras = [], b"", 0
+    assert proc.stdout is not None
+    while True:
+        datos = proc.stdout.read(cuadro * 512)
+        if not datos:
+            break
+        datos = resto + datos
+        util = len(datos) - len(datos) % cuadro
+        resto = datos[util:]
+        x = np.frombuffer(datos[:util], dtype="<i2").astype(np.float32) / 32768.0
+        muestras += len(x)
+        if len(x):
+            partes.append(np.sqrt((x.reshape(-1, HOP) ** 2).mean(axis=1)))
+    proc.wait()
+    if proc.returncode != 0:
+        raise RuntimeError(f"ffmpeg no pudo leer {archivo.name}")
+    muestras += len(resto) // 2
+    rms = np.concatenate(partes) if partes else np.zeros(0, np.float32)
+    return rms, muestras / SR
 
 
-def plegar_bpm(bpm: float, minimo=82.0, maximo=164.0) -> float:
+def plegar_bpm(bpm: float, minimo=BPM_MIN, maximo=BPM_MAX) -> float:
     """Corrige errores de octava del detector de beats.
 
-    Los beat trackers eligen mal el nivel metrico muy seguido: reportan
-    mitad o doble de tiempo. Ningun tema bailable real vive fuera de
+    Los estimadores de tempo eligen mal el nivel metrico muy seguido:
+    reportan mitad o doble de tiempo. Ningun tema bailable real vive fuera de
     82-164 BPM, asi que duplicamos o dividimos hasta caer en la banda.
     """
     if bpm <= 0:
@@ -67,58 +90,80 @@ def plegar_bpm(bpm: float, minimo=82.0, maximo=164.0) -> float:
     return bpm
 
 
-def estimar_tono(y, sr) -> str:
-    """Estimacion de tonalidad. Es una PISTA, no una verdad:
-    con tanta percusion (cumbia, axe, carnaval) se equivoca seguido."""
-    chroma = librosa.feature.chroma_cqt(y=y, sr=sr).mean(axis=1)
-    mejor, puntaje = None, -np.inf
-    for i in range(12):
-        rot = np.roll(chroma, -i)
-        for perfil, modo in ((PERFIL_MAYOR, ""), (PERFIL_MENOR, "m")):
-            p = np.corrcoef(rot, perfil)[0, 1]
-            if p > puntaje:
-                mejor, puntaje = f"{NOTAS[i]}{modo}", p
-    return mejor
+def estimar_bpm(onsets: np.ndarray) -> float:
+    """BPM por autocorrelacion de la curva de onsets."""
+    if len(onsets) < 32:
+        return 120.0
+    por_seg = SR / HOP
+    lag_min = max(1, round(por_seg * 60 / 200))
+    lag_max = min(len(onsets) // 2, round(por_seg * 60 / 50))
+    if lag_max <= lag_min:
+        return 120.0
+    c = onsets - onsets.mean()
+    puntajes = [np.dot(c[:-lag], c[lag:]) / (len(c) - lag) for lag in range(lag_min, lag_max + 1)]
+    mejor = lag_min + int(np.argmax(puntajes))
+    return 60 * por_seg / mejor
 
 
-def proponer_tramo(y, sr, compases, duracion):
-    """Elige el tramo de mayor energia sostenida y lo pega al inicio de un compas.
+def grilla_de_compases(onsets: np.ndarray, bpm: float, duracion: float) -> list[float]:
+    """Arranques de compas.
+
+    Con el BPM se sabe cada cuanto cae un beat; falta la FASE. Se prueban
+    corrimientos y gana el que mas energia de onset acumula: ahi estan los
+    golpes de verdad.
+    """
+    por_seg = SR / HOP
+    por_beat = 60 / bpm * por_seg if bpm > 0 else 0
+    if por_beat < 1 or not len(onsets):
+        return [0.0]
+    mejor_fase, mejor = 0, -1.0
+    for fase in range(max(1, round(por_beat))):
+        idx = np.arange(fase, len(onsets), por_beat).astype(int)
+        # arange con paso decimal puede generar un elemento de mas, justo
+        # afuera del arreglo, por imprecision de coma flotante
+        idx = idx[idx < len(onsets)]
+        suma = float(onsets[idx].sum())
+        if suma > mejor:
+            mejor_fase, mejor = fase, suma
+    paso = 60 / bpm * COMPAS
+    return list(np.arange(mejor_fase / por_seg, duracion, paso)) or [0.0]
+
+
+def proponer_tramo(rms: np.ndarray, compases: list[float], duracion: float,
+                   largo: float) -> tuple[float, float]:
+    """Elige el tramo de mayor energia sostenida y lo pega al compas.
 
     El estribillo casi siempre es la parte mas energica del tema, asi que
     esto ademas esquiva solo las intros habladas y los fade-in largos.
     """
-    rms = librosa.feature.rms(y=y, hop_length=HOP)[0]
-    t = librosa.frames_to_time(np.arange(len(rms)), sr=sr, hop_length=HOP)
-    total = len(y) / sr
+    if not len(rms):
+        return 0.0, round(min(largo, duracion), 2)
+    por_seg = SR / HOP
+    acumulado = np.concatenate([[0.0], np.cumsum(rms, dtype=np.float64)])
+    ventana = max(1, int(largo * por_seg))
 
-    candidatos = [c for c in compases if c + duracion <= total]
+    candidatos = [c for c in compases if c + largo <= duracion]
     if not candidatos:
-        return 0.0, round(total, 2)
+        return 0.0, round(min(largo, duracion), 2)
 
-    mejor, energia_max = candidatos[0], -np.inf
-    for inicio in candidatos:
-        ventana = rms[(t >= inicio) & (t < inicio + duracion)]
-        if len(ventana) and ventana.mean() > energia_max:
-            mejor, energia_max = inicio, ventana.mean()
+    def energia(inicio: float) -> float:
+        a = int(inicio * por_seg)
+        b = min(a + ventana, len(rms))
+        return (acumulado[b] - acumulado[a]) / (b - a) if b > a else -1.0
 
+    mejor = max(candidatos, key=energia)
     # el corte tambien cae en compas, para que la transicion no quede coja
-    fin = min((c for c in compases if c >= mejor + duracion), default=mejor + duracion)
-    return round(float(mejor), 2), round(float(min(fin, total)), 2)
+    fin = min((c for c in compases if c >= mejor + largo), default=mejor + largo)
+    return round(float(mejor), 2), round(float(min(fin, duracion)), 2)
 
 
 def analizar(archivo: Path, duracion: float) -> dict:
-    wav = decodificar(archivo)
-    try:
-        y, sr = librosa.load(wav, sr=SR, mono=True)
-    finally:
-        Path(wav).unlink(missing_ok=True)
-
-    tempo, beats = librosa.beat.beat_track(y=y, sr=sr, units="time")
-    bpm_crudo = float(np.atleast_1d(tempo)[0])
+    rms, total = envolvente(archivo)
+    onsets = np.maximum(0.0, np.diff(rms)) if len(rms) > 1 else np.zeros(0)
+    bpm_crudo = estimar_bpm(onsets)
     bpm = plegar_bpm(bpm_crudo)
-    compases = list(beats[::COMPAS]) if len(beats) else [0.0]
-
-    inicio, fin = proponer_tramo(y, sr, compases, duracion)
+    compases = grilla_de_compases(onsets, bpm, total)
+    inicio, fin = proponer_tramo(rms, compases, total, duracion)
 
     return {
         # el ID es la identidad del tema; el orden lo pone la receta
@@ -127,15 +172,14 @@ def analizar(archivo: Path, duracion: float) -> dict:
         "titulo": sin_id(archivo.stem),
         "bpm": round(bpm, 1),
         "bpm_crudo": round(bpm_crudo, 1),
-        "tono_pista": estimar_tono(y, sr),
-        "duracion_total": round(len(y) / sr, 2),
+        "duracion_total": round(total, 2),
         "inicio": inicio,
         "fin": fin,
         "crossfade_siguiente": None,   # None = usa el global de la receta
     }
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description="Propone una receta de enganchado")
     ap.add_argument("set", help="nombre del set, ej: 01-carnaval-carioca")
     ap.add_argument("--duracion", type=float, default=60.0,
@@ -148,7 +192,7 @@ def main():
     ap.add_argument("--nuevos", action="store_true",
                     help="analiza solo los audios que todavia no estan en la "
                          "receta; los que ya estan quedan con tus ajustes")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     carpeta = RAIZ / "musica" / args.set
     if not carpeta.is_dir():

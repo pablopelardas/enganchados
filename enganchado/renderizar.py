@@ -23,7 +23,10 @@ for flujo in (sys.stdout, sys.stderr):
     except AttributeError:
         pass
 
-RAIZ = Path(__file__).resolve().parent.parent
+# La raiz de los DATOS: el repo al correr desde el codigo, o
+# Documentos/Enganchados en la app empaquetada. Ver rutas.py.
+from rutas import DATOS as RAIZ
+from rutas import SIN_VENTANA, herramienta
 SR = 44100
 
 # -14 LUFS es el estandar de streaming. Lo importante no es el numero
@@ -33,7 +36,9 @@ LOUDNORM = "loudnorm=I=-14:TP=-1.5:LRA=11"
 
 
 def ffmpeg(args):
-    subprocess.run(["ffmpeg", "-v", "error", "-y", *args], check=True)
+    # el ffmpeg que trae la app si esta; si no, el del sistema (rutas.py)
+    subprocess.run([herramienta("ffmpeg"), "-v", "error", "-y", *args],
+                   check=True, **SIN_VENTANA)
 
 
 def extraer(tema, destino, crossfade):
@@ -165,7 +170,7 @@ def mezclar(temas, salida, crossfade):
         shutil.rmtree(tmp, ignore_errors=True)
 
 
-def main():
+def main(argv=None):
     ap = argparse.ArgumentParser(description="Renderiza un enganchado desde su receta")
     ap.add_argument("set", help="nombre del set, ej: 01-carnaval-carioca")
     ap.add_argument("--crossfade", type=float, default=None,
@@ -176,7 +181,7 @@ def main():
                     help="reordena de menor a mayor BPM en vez de respetar la receta")
     ap.add_argument("--stems", action="store_true",
                     help="exporta los tramos sueltos + proyecto de Reaper en vez de la mezcla")
-    args = ap.parse_args()
+    args = ap.parse_args(argv)
 
     receta_path = RAIZ / "recetas" / f"{args.set}.json"
     if not receta_path.exists():
@@ -205,14 +210,13 @@ def main():
 
     mezclar(temas, salida, crossfade)
 
-    dur = subprocess.run(
-        ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-         "-of", "default=nw=1:nk=1", str(salida)],
-        capture_output=True, text=True, check=True,
-    ).stdout.strip()
+    # La duracion sale de la receta: cada union se come un cruce, pero el
+    # ultimo tramo conserva su cola. Sin ffprobe, que seria un binario mas
+    # para empaquetar solo para mostrar este numero.
+    minutos = (sum(t["fin"] - t["inicio"] for t in temas) + crossfade) / 60
     mb = salida.stat().st_size / 1024 / 1024
     print(f"\nListo: {salida.relative_to(RAIZ)}")
-    print(f"       {float(dur)/60:.1f} min  |  {mb:.1f} MB")
+    print(f"       ~{minutos:.1f} min  |  {mb:.1f} MB")
 
 
 if __name__ == "__main__":

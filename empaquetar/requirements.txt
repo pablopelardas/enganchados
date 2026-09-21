@@ -1,0 +1,4 @@
+# Solo para ARMAR la app de escritorio (no hace falta para usarla desde el repo)
+pyinstaller>=6.10
+pywebview>=5.3
+pillow>=10.0

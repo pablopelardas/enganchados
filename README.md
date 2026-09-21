@@ -3,9 +3,19 @@
 Arma enganchados (medleys) a partir de temas de YouTube: los baja, mide el
 BPM de cada uno, propone qué tramo usar, y los pega sin huecos.
 
+## Descargar
+
+**[→ Bajar la última versión](https://github.com/pablopelardas/enganchados/releases/latest)**
+
+Para Windows y Mac. Se instala como cualquier programa: no hace falta saber
+nada de computación ni instalar nada más. En la página de descarga están los
+pasos, incluido qué hacer con el aviso de seguridad que aparece la primera vez.
+
+---
+
 Viene en dos formas que hacen lo mismo:
 
-- **Escritorio** (Windows, macOS, Linux): una app web que corre en tu máquina.
+- **Escritorio** (Windows, macOS): la app de arriba.
 - **Android**: una app nativa, en [`android/`](android/README.md).
 
 ---
@@ -22,7 +32,10 @@ el tramo con criterio: eso lo ponés vos, y para eso está el editor.
 
 ---
 
-## Instalación
+## Correrlo desde el código
+
+Esto es para quien quiera tocar el código. Para usarla, alcanza con la
+[descarga de arriba](#descargar).
 
 ### Windows
 
@@ -187,6 +200,21 @@ Es tu responsabilidad.
 
 No está pensada ni preparada para correr como servicio público, y por la misma
 razón no está publicada en ninguna tienda de apps.
+
+---
+
+## Publicar una versión nueva
+
+Las apps de Windows y Mac las arma GitHub solo. Alcanza con marcar la versión:
+
+```
+git tag v0.2.0
+git push origin v0.2.0
+```
+
+Unos 15 minutos después aparece en [Releases](https://github.com/pablopelardas/enganchados/releases)
+con los tres archivos. El proceso está en `.github/workflows/release.yml`, y
+para armarla a mano en tu máquina: `python empaquetar/construir.py`.
 
 ---
 

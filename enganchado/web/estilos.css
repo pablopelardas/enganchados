@@ -314,6 +314,11 @@ dialog.hoja::backdrop { background: rgba(0, 0, 0, .55); }
 #lista-sets .actual { color: var(--acento); }
 #lista-sets .borrar { color: var(--mal); }
 
+.carpeta-datos { display: flex; flex-direction: column; gap: 6px; margin-bottom: 8px; }
+.carpeta-datos[hidden] { display: none; }
+.carpeta-datos code { word-break: break-all; padding: 8px 10px; font-size: 12.5px; }
+.carpeta-datos .fila-botones { margin: 4px 0 0; }
+
 #log { background: var(--fondo); border-radius: 10px; padding: 12px; margin: 8px 0;
        max-height: 50vh; overflow: auto; font: 12px/1.6 ui-monospace, Consolas, monospace;
        color: var(--tenue); white-space: pre-wrap; }

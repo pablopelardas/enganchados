@@ -1,8 +1,7 @@
-# Analisis de audio
-librosa>=1.0
+# Analisis: solo numpy. Antes era librosa, que arrastraba scipy, numba y
+# llvmlite (cientos de MB) solo para medir el BPM.
 numpy>=2.0
-soundfile>=0.13
 
-# Manager web
+# App web
 fastapi>=0.115
 uvicorn>=0.30

@@ -12,22 +12,29 @@ Uso:
 """
 import asyncio
 import json
+import os
 import re
 import shutil
+import subprocess
 import sys
 import zipfile
 from pathlib import Path
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from orden import AUDIO, archivos_ordenados, id_de, sin_id
 
-RAIZ = Path(__file__).resolve().parent.parent
-WEB = Path(__file__).resolve().parent / "web"
-CONFIG_YTDLP = RAIZ / "yt-dlp.conf"
+import rutas
+from rutas import CONFIG_YTDLP, SIN_VENTANA, herramienta
+
+# La raiz de los DATOS (sets, musica, recetas, salida): el repo al correr
+# desde el codigo, o Documentos/Enganchados en la app. Ver rutas.py.
+RAIZ = rutas.DATOS
+WEB = rutas.CODIGO / "web"
+
 # El Python del entorno virtual: Windows lo pone en Scripts\, macOS y Linux
 # en bin/. Si no hay ninguno, el mismo que esta corriendo este server.
 PYTHON = next(
@@ -35,6 +42,19 @@ PYTHON = next(
                       RAIZ / ".venv" / "bin" / "python") if p.exists()),
     sys.executable,
 )
+
+
+def lanzar(script: str) -> list[str]:
+    """Como correr analizar o renderizar en un proceso aparte.
+
+    Desde el repo, con el Python del venv. En la app empaquetada no hay un
+    Python suelto: el propio ejecutable de la app atiende "--tarea"
+    (ver app.py). Seguir en un proceso aparte mantiene la misma salida en
+    vivo por SSE, y si una tarea revienta no se lleva puesta la ventana.
+    """
+    if rutas.CONGELADO:
+        return [sys.executable, "--tarea", script]
+    return [PYTHON, str(rutas.CODIGO / f"{script}.py")]
 
 # Los nombres de set vienen del cliente y se usan para armar rutas.
 # Sin esto, un nombre como "../../etc" se escapa del proyecto.
@@ -49,6 +69,9 @@ from contextlib import asynccontextmanager
 
 @asynccontextmanager
 async def al_arrancar(_app):
+    # en la app recien instalada, Documentos/Enganchados todavia no existe
+    for sub in ("sets", "musica", "recetas", "salida"):
+        (RAIZ / sub).mkdir(parents=True, exist_ok=True)
     alinear_todos_con_receta()
     yield
 
@@ -341,10 +364,11 @@ async def buscar(q: str, desde: int = 1, hasta: int = 20):
     hasta = max(desde, min(hasta, desde + 49))
 
     proc = await asyncio.create_subprocess_exec(
-        "yt-dlp", f"ytsearch{hasta}:{q}", "-I", f"{desde}:{hasta}",
+        herramienta("yt-dlp"), f"ytsearch{hasta}:{q}", "-I", f"{desde}:{hasta}",
         "--flat-playlist", "--dump-json", "--no-warnings", "--quiet",
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.DEVNULL,
+        **SIN_VENTANA,
     )
     crudo, _ = await proc.communicate()
 
@@ -559,25 +583,158 @@ def audio_salida(nombre: str, descargar: bool = False):
     return FileResponse(archivo, media_type="audio/mp4")
 
 
-@app.get("/api/sets/{nombre}/zip")
-def descargar_zip(nombre: str):
+def armar_zip(nombre: str) -> Path:
     """Stems + proyecto de Reaper en un ZIP, para llevar a la PC.
 
     Sin comprimir a proposito: el WAV casi no comprime (medido, 6%) y
     comprimirlo tardaba. Se rearma solo si los stems son mas nuevos.
     """
-    validar(nombre)
     stems = RAIZ / "salida" / f"{nombre}-stems"
     if not stems.is_dir():
         raise HTTPException(404, "Todavia no se exportaron los stems")
-
     zp = RAIZ / "salida" / f"{nombre}-stems.zip"
     archivos = sorted(p for p in stems.iterdir() if p.is_file())
     if not zp.exists() or any(p.stat().st_mtime > zp.stat().st_mtime for p in archivos):
         with zipfile.ZipFile(zp, "w", zipfile.ZIP_STORED) as z:
             for p in archivos:
                 z.write(p, p.name)
+    return zp
+
+
+@app.get("/api/sets/{nombre}/zip")
+def descargar_zip(nombre: str):
+    validar(nombre)
+    zp = armar_zip(nombre)
     return FileResponse(zp, media_type="application/zip", filename=f"{nombre}-stems.zip")
+
+
+# ======================================================== app de escritorio
+
+@app.get("/api/info")
+def info():
+    """Si esto corre como app instalada o como web desde el repo.
+
+    En la app, "descargar" no tiene sentido: los archivos ya estan en tu
+    compu. Ahi el front muestra "Mostrar en la carpeta" en su lugar.
+    """
+    return {"modo": "app" if rutas.CONGELADO else "web", "datos": str(RAIZ)}
+
+
+def mostrar_en_carpeta(p: Path) -> None:
+    """Abre el explorador de archivos con el archivo seleccionado."""
+    if os.name == "nt":
+        if p.is_file():
+            # explorer espera /select pegado a la ruta; como lista de
+            # argumentos subprocess la comilla mal y abre "Documentos"
+            subprocess.Popen(f'explorer /select,"{p}"')
+        else:
+            os.startfile(p)  # noqa: S606 — carpeta propia de la app
+    elif sys.platform == "darwin":
+        subprocess.Popen(["open", "-R", str(p)] if p.is_file() else ["open", str(p)])
+    else:
+        subprocess.Popen(["xdg-open", str(p.parent if p.is_file() else p)])
+
+
+@app.post("/api/mostrar")
+def mostrar(request: Request, set: str | None = None, que: str = "carpeta"):
+    # Abre ventanas en ESTA maquina: solo si el pedido viene de ella misma.
+    # En modo --lan, alguien de la red no puede abrirte exploradores.
+    if request.client is None or request.client.host not in ("127.0.0.1", "::1"):
+        raise HTTPException(403, "Solo desde esta computadora")
+
+    if que == "carpeta":
+        objetivo = RAIZ
+    else:
+        validar(set or "")
+        if que == "m4a":
+            objetivo = RAIZ / "salida" / f"{set}.m4a"
+        elif que == "zip":
+            objetivo = armar_zip(set)
+        else:
+            raise HTTPException(400, "Que mostrar: carpeta, m4a o zip")
+        if not objetivo.exists():
+            raise HTTPException(404, "Todavia no existe")
+
+    mostrar_en_carpeta(objetivo)
+    return {"ok": True}
+
+
+# Ganchos que conecta app.py cuando hay ventana propia. Desde el repo (modo
+# web) quedan en None y cambiar la carpeta no se ofrece.
+elegir_carpeta = None      # () -> str | None: abre el selector del sistema
+pedir_reinicio = None      # () -> None: cierra la ventana y relanza la app
+
+SUBCARPETAS = ("sets", "musica", "recetas", "salida")
+
+
+def solo_local(request: Request) -> None:
+    if request.client is None or request.client.host not in ("127.0.0.1", "::1"):
+        raise HTTPException(403, "Solo desde esta computadora")
+
+
+@app.get("/api/carpeta-datos")
+def ver_carpeta_datos():
+    return {"datos": str(RAIZ), "puede_cambiar": elegir_carpeta is not None}
+
+
+def tiene_enganchados(carpeta: Path) -> bool:
+    return any((carpeta / "sets").glob("*.txt")) if (carpeta / "sets").is_dir() else False
+
+
+@app.post("/api/carpeta-datos")
+async def cambiar_carpeta_datos(request: Request):
+    """Cambia donde se guardan los enganchados.
+
+    Si la carpeta nueva esta vacia, se MUDAN los enganchados: cambiar de
+    carpeta no puede parecer que los borro. Si ya tiene enganchados (un
+    backup, otra compu), se usa tal cual, sin mezclar.
+    Se aplica al reiniciar la app: todas las rutas se fijan al arrancar.
+    """
+    solo_local(request)
+    if elegir_carpeta is None:
+        raise HTTPException(400, "Solo en la app instalada")
+
+    from fastapi.concurrency import run_in_threadpool
+    elegida = await run_in_threadpool(elegir_carpeta)
+    if not elegida:
+        return {"cambiado": False}
+
+    nueva = Path(elegida)
+    # Si elegis una carpeta con otras cosas adentro (Musica, Escritorio...),
+    # no se desparraman sets/ y musica/ ahi: se crea Enganchados adentro.
+    if nueva.name != "Enganchados" and any(nueva.iterdir()) and not tiene_enganchados(nueva):
+        nueva = nueva / "Enganchados"
+
+    actual = RAIZ.resolve()
+    destino = nueva.resolve()
+    if destino == actual:
+        return {"cambiado": False}
+    if actual in destino.parents or destino in actual.parents:
+        raise HTTPException(400, "Elegí una carpeta que no esté adentro de la actual (ni al revés)")
+
+    movido = False
+    if not tiene_enganchados(destino):
+        destino.mkdir(parents=True, exist_ok=True)
+
+        def mudar():
+            for sub in SUBCARPETAS:
+                if (actual / sub).exists() and not (destino / sub).exists():
+                    shutil.move(str(actual / sub), str(destino / sub))
+
+        await run_in_threadpool(mudar)
+        movido = True
+
+    rutas.guardar_datos(destino)
+    return {"cambiado": True, "datos": str(destino), "movido": movido}
+
+
+@app.post("/api/reiniciar")
+def reiniciar(request: Request):
+    solo_local(request)
+    if pedir_reinicio is None:
+        raise HTTPException(400, "Solo en la app instalada")
+    pedir_reinicio()
+    return {"ok": True}
 
 
 # ============================================================ tareas
@@ -593,6 +750,10 @@ async def transmitir(cmd: list[str]):
         stdout=asyncio.subprocess.PIPE,
         stderr=asyncio.subprocess.STDOUT,
         cwd=str(RAIZ),
+        # sin buffer: si no, la app empaquetada manda la salida toda junta al
+        # final y el avance en pantalla queda quieto hasta que termina
+        env={**os.environ, "PYTHONUNBUFFERED": "1"},
+        **SIN_VENTANA,
     )
     assert proc.stdout is not None
     async for cruda in proc.stdout:
@@ -623,7 +784,7 @@ async def bajar_faltantes(nombre: str):
     for k, f in enumerate(filas, 1):
         yield sse(linea=f"[{k:02d}/{len(filas)}] {f['titulo'][:70]}")
         proc = await asyncio.create_subprocess_exec(
-            "yt-dlp", f["texto"],
+            herramienta("yt-dlp"), f["texto"],
             "--config-locations", str(CONFIG_YTDLP),
             "--paths", str(carpeta),
             "-o", "[%(id)s] %(title)s.%(ext)s",
@@ -634,6 +795,7 @@ async def bajar_faltantes(nombre: str):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.STDOUT,
             cwd=str(RAIZ),
+            **SIN_VENTANA,
         )
         assert proc.stdout is not None
         vid = None
@@ -664,7 +826,7 @@ async def bajar_faltantes(nombre: str):
 
 def comando_de(accion: str, nombre: str, opciones: dict) -> list[str]:
     if accion == "analizar":
-        cmd = [PYTHON, str(RAIZ / "enganchado" / "analizar.py"), nombre]
+        cmd = [*lanzar("analizar"), nombre]
         if opciones.get("duracion"):
             cmd += ["--duracion", str(opciones["duracion"])]
         modo = opciones.get("modo", "nuevos")
@@ -674,7 +836,7 @@ def comando_de(accion: str, nombre: str, opciones: dict) -> list[str]:
             cmd.append("--nuevos")   # respeta lo que ya ajustaste
         return cmd                   # "todos": re-analiza y pisa los ajustes
     if accion == "renderizar":
-        cmd = [PYTHON, str(RAIZ / "enganchado" / "renderizar.py"), nombre]
+        cmd = [*lanzar("renderizar"), nombre]
         if opciones.get("stems"):
             cmd.append("--stems")
         if opciones.get("crossfade") is not None:
@@ -694,7 +856,7 @@ def respuesta_sse(generador):
 @app.post("/api/actualizar-ytdlp")
 async def actualizar_ytdlp():
     """YouTube cambia seguido y un yt-dlp viejo deja de poder bajar."""
-    return respuesta_sse(transmitir(["yt-dlp", "-U"]))
+    return respuesta_sse(transmitir([herramienta("yt-dlp"), "-U"]))
 
 
 # Tiene que ir ULTIMA entre las POST de /api/sets/{nombre}/...: atrapa
@@ -709,7 +871,7 @@ async def correr_tarea(nombre: str, accion: str, opciones: dict | None = None):
 
 # ========================================================== estaticos
 
-WEB.mkdir(parents=True, exist_ok=True)
+# Sin mkdir: en la app empaquetada esta carpeta es de solo lectura.
 app.mount("/", StaticFiles(directory=str(WEB), html=True), name="web")
 
 

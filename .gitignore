@@ -42,3 +42,14 @@ recetas/
 # --- Salidas de Android ---
 android/app/release/
 android/.kotlin/
+
+# --- Empaquetado ---
+dist/
+empaquetar/build/
+empaquetar/descargas/
+empaquetar/bin/
+empaquetar/icono.ico
+empaquetar/icono.icns
+empaquetar/icono.iconset/
+enganchado/_version.py
+*.spec

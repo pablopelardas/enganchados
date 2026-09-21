@@ -960,8 +960,66 @@ function irACruce (direccion) {
 $('#cruce-anterior').onclick = () => irACruce(-1)
 $('#cruce-siguiente').onclick = () => irACruce(1)
 
+// ========================================================= app instalada
+
+/**
+ * Instalada como app, "descargar" no tiene sentido: los archivos ya estan
+ * en la compu, en Documentos/Enganchados. Ahi los botones abren el
+ * explorador de archivos con el archivo seleccionado, que es mas claro para
+ * quien no sabe donde termino lo que bajo.
+ */
+async function prepararModoApp () {
+  let info
+  try { info = await api('/api/info') } catch { return }
+  if (info.modo !== 'app') return
+
+  const mostrar = (que) => async (e) => {
+    e.preventDefault()
+    try {
+      const set = que === 'carpeta' ? '' : `&set=${encodeURIComponent(estado.set)}`
+      await api(`/api/mostrar?que=${que}${set}`, { method: 'POST' })
+    } catch (err) { avisar(err.message) }
+  }
+
+  $('#descargar-m4a').textContent = 'Mostrar el m4a en la carpeta'
+  $('#descargar-m4a').onclick = mostrar('m4a')
+  $('#descargar-zip').textContent = 'Mostrar el ZIP en la carpeta'
+  $('#descargar-zip').onclick = mostrar('zip')
+  $('#abrir-carpeta').onclick = mostrar('carpeta')
+
+  const carpeta = await api('/api/carpeta-datos')
+  $('#carpeta-datos').hidden = false
+  $('#ruta-datos').textContent = carpeta.datos
+  $('#cambiar-carpeta').hidden = !carpeta.puede_cambiar
+  $('#cambiar-carpeta').onclick = cambiarCarpeta
+}
+
+/**
+ * Cambia donde se guardan los enganchados. Si la carpeta nueva esta vacia,
+ * se mudan los que habia; despues la app se reinicia sola para usarla.
+ */
+async function cambiarCarpeta () {
+  const boton = $('#cambiar-carpeta')
+  boton.disabled = true
+  boton.textContent = 'Eligiendo…'
+  try {
+    const r = await api('/api/carpeta-datos', { method: 'POST' })
+    if (!r.cambiado) return
+    avisar(r.movido
+      ? 'Listo, tus enganchados se mudaron. Reiniciando…'
+      : 'Listo, uso los enganchados de esa carpeta. Reiniciando…')
+    setTimeout(() => api('/api/reiniciar', { method: 'POST' }).catch(() => {}), 1500)
+  } catch (e) {
+    avisar(e.message)
+  } finally {
+    boton.disabled = false
+    boton.textContent = 'Cambiar…'
+  }
+}
+
 // ============================================================== arranque
 
+await prepararModoApp()
 await cargarSets()
 const ultimo = guardadoLocal.leer('enganchado')
 const inicial = estado.sets.find((s) => s.nombre === ultimo)?.nombre ?? estado.sets[0]?.nombre
