@@ -335,3 +335,163 @@ dialog.hoja::backdrop { background: rgba(0, 0, 0, .55); }
   transition: opacity .2s, transform .2s; z-index: 20;
 }
 #aviso.visible { opacity: 1; transform: translate(-50%, 0); }
+
+/* ======================================================================
+   ESCRITORIO
+   Desde 1000 px la interfaz deja de ser una columna de celular centrada:
+   barra lateral con los enganchados, pestanas arriba, y cada panel usa el
+   ancho. Por debajo de eso, todo queda como en la app de Android.
+   ====================================================================== */
+
+/* Lo que solo existe en escritorio, apagado por defecto */
+#lateral, .lista-tramos, .fila-mb { display: none; }
+
+@media (min-width: 1000px) {
+  :root { --lateral: 280px; }
+
+  #app {
+    max-width: none; border: none;
+    height: 100vh;
+    display: grid;
+    grid-template-columns: var(--lateral) minmax(0, 1fr);
+    grid-template-rows: var(--barra) 3px auto minmax(0, 1fr);
+    grid-template-areas:
+      "barra    barra"
+      "progreso progreso"
+      "lateral  tabs"
+      "lateral  contenido";
+  }
+  #barra     { grid-area: barra; padding-left: 20px; }
+  #progreso  { grid-area: progreso; position: static; }
+  #abrir-sets { display: none; }          /* la barra lateral lo reemplaza */
+
+  /* ------------------------------------------------------ barra lateral */
+  #lateral {
+    grid-area: lateral;
+    display: flex; flex-direction: column;
+    background: var(--panel); border-right: 1px solid var(--borde);
+    padding: 18px 12px; overflow-y: auto; min-height: 0;
+  }
+  .lateral-titulo {
+    font-size: 11.5px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--tenue); margin: 0 10px 10px;
+  }
+  #lateral-sets li { display: flex; align-items: center; border-radius: 10px; margin-bottom: 2px; }
+  #lateral-sets li:hover { background: var(--panel-alto); }
+  #lateral-sets li.actual { background: rgba(255, 179, 64, .13); }
+  #lateral-sets .abrir {
+    flex: 1; min-width: 0; min-height: 0; padding: 10px 12px;
+    background: none; border: none; text-align: left;
+    flex-direction: column; align-items: flex-start; gap: 1px;
+  }
+  #lateral-sets .abrir span { width: 100%; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  #lateral-sets .abrir small { color: var(--tenue); font-size: 12px; }
+  #lateral-sets li.actual .abrir span { color: var(--acento); font-weight: 600; }
+  #lateral-sets .borrar { color: var(--mal); opacity: 0; transition: opacity .12s; }
+  #lateral-sets li:hover .borrar, #lateral-sets .borrar.armado { opacity: 1; }
+  #lateral-sets .borrar.armado { width: auto; padding: 0 10px; border-radius: 8px; }
+  #form-nuevo-lateral { margin: 10px 0 0; }
+  .lateral-pie { margin-top: auto; padding-top: 16px; border-top: 1px solid var(--borde); }
+
+  /* ------------------------------------------------------- pestanas */
+  #tabs {
+    grid-area: tabs; position: static; max-width: none; margin: 0;
+    height: auto; padding: 0 28px;
+    background: var(--fondo); border-top: none; border-bottom: 1px solid var(--borde);
+    justify-content: flex-start; gap: 4px;
+  }
+  #tabs button {
+    flex: none; flex-direction: row; gap: 8px; font-size: 14.5px;
+    padding: 14px 16px; min-height: 0;
+    border-bottom: 2px solid transparent; border-radius: 0;
+  }
+  #tabs button svg { padding: 0; width: 20px; height: 20px; background: none !important; }
+  #tabs button:hover { color: var(--texto); }
+  #tabs button.activa { color: var(--acento); border-bottom-color: var(--acento); }
+
+  /* ------------------------------------------------------- contenido */
+  #contenido { grid-area: contenido; padding: 28px 36px 48px; overflow-y: auto; min-height: 0; }
+  .panel { max-width: 1240px; }
+  .centro { margin-top: 12vh; }
+
+  /* ---------------------------------------------------------- Temas */
+  #p-temas > .fila-botones { justify-content: flex-end; margin: 0 0 16px; }
+  #p-temas > .fila-botones > * { flex: none; min-width: 170px; }
+  #filas { border: 1px solid var(--borde); border-radius: 14px; overflow: hidden; }
+  #filas li { padding: 10px 16px; gap: 14px; }
+  #filas li:last-child { border-bottom: none; }
+  #filas li:hover { background: var(--panel); }
+  .fila-titulo { -webkit-line-clamp: 1; font-size: 15px; }
+  .fila-mb { display: block; width: 72px; flex: none; text-align: right;
+             color: var(--tenue); font: 12.5px ui-monospace, Consolas, monospace; }
+  /* las acciones aparecen al pasar el mouse: la lista se lee limpia */
+  #filas .icono { opacity: .3; transition: opacity .12s; }
+  #filas li:hover .icono, #filas .icono.armado { opacity: 1; }
+  #filas .icono:disabled { opacity: .1 !important; }
+
+  /* --------------------------------------------------------- Tramos */
+  #btn-analizar { width: auto; min-width: 260px; margin-bottom: 20px; }
+  #editor-tramo:not([hidden]) {
+    display: grid; grid-template-columns: 320px minmax(0, 1fr); gap: 24px; align-items: start;
+  }
+  .lista-tramos {
+    display: block; list-style: none; margin: 0; padding: 6px;
+    background: var(--panel); border: 1px solid var(--borde); border-radius: 14px;
+    max-height: calc(100vh - 240px); overflow-y: auto;
+    position: sticky; top: 0;
+  }
+  .lista-tramos li {
+    display: flex; align-items: center; gap: 10px;
+    padding: 9px 10px; border-radius: 10px; cursor: pointer;
+  }
+  .lista-tramos li:hover { background: var(--panel-alto); }
+  .lista-tramos li.activa { background: rgba(255, 179, 64, .14); }
+  .lista-tramos .n { width: 24px; flex: none; color: var(--tenue);
+                     font: 12.5px ui-monospace, Consolas, monospace; }
+  .lista-tramos .t { flex: 1; min-width: 0; }
+  .lista-tramos .t div { font-size: 14px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .lista-tramos .t small { color: var(--tenue); font-size: 12px; }
+  .lista-tramos li.activa .t div { color: var(--acento); font-weight: 600; }
+  .lista-tramos .largo { flex: none; color: var(--tenue); font: 12px ui-monospace, Consolas, monospace; }
+
+  #chips { display: none; }                  /* la lista los reemplaza */
+  .tramo-detalle {
+    background: var(--panel); border: 1px solid var(--borde); border-radius: 16px;
+    padding: 22px 24px;
+  }
+  .cabecera-tema strong { font-size: 18px; }
+  #onda { background: var(--fondo); min-height: 220px; }
+  .tramo-detalle .fila-botones > * { flex: none; min-width: 180px; }
+  #pegar-compas, #re-analizar { width: auto; }
+
+  /* ---------------------------------------------------------- Armar */
+  .armar-grid {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1.25fr);
+    grid-template-areas: "mezcla reproductor" "stems reproductor";
+    gap: 8px 32px; align-items: start;
+  }
+  .armar-mezcla { grid-area: mezcla; }
+  .armar-stems  { grid-area: stems; }
+  #reproductor  { grid-area: reproductor; margin: 0; padding: 26px 28px; gap: 10px; }
+  #reproductor strong { font-size: 17px; }
+  .armar-stems hr { margin-top: 8px; }
+
+  /* ---------------------------------------------------------- hojas */
+  /* En escritorio las hojas entran desde la derecha, como un panel:
+     ves tu lista de temas mientras elegis en el buscador. */
+  dialog.hoja {
+    margin: 0 0 0 auto; width: 540px; max-width: 92vw;
+    height: 100vh; max-height: 100vh;
+    border-radius: 20px 0 0 20px;
+    border-left: 1px solid var(--borde);
+  }
+  dialog.hoja[open] { animation: entrar .22s ease-out; }
+  dialog.hoja::backdrop { background: rgba(0, 0, 0, .35); }
+  .hoja-cuerpo { height: 100%; max-height: 100vh; padding: 22px 24px; }
+  .hoja-agarre { display: none; }
+
+  #aviso { bottom: 28px; left: calc(50% + var(--lateral) / 2); }
+}
+
+@keyframes entrar { from { transform: translateX(40px); opacity: 0; } }

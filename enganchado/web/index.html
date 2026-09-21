@@ -22,6 +22,30 @@
   </header>
   <div id="progreso"><div></div></div>
 
+  <!-- Barra lateral: solo en pantallas anchas. En el celular lo mismo vive
+       en la hoja del menu ≡. -->
+  <aside id="lateral">
+    <h2 class="lateral-titulo">Tus enganchados</h2>
+    <ul id="lateral-sets" class="lista"></ul>
+    <form id="form-nuevo-lateral" class="campo-buscar">
+      <input id="nombre-nuevo-lateral" placeholder="nuevo enganchado" autocomplete="off">
+      <button class="icono" aria-label="Crear">
+        <svg viewBox="0 0 24 24"><path d="M12 5v14M5 12h14"/></svg>
+      </button>
+    </form>
+    <div class="lateral-pie">
+      <div id="lateral-carpeta" class="carpeta-datos" hidden>
+        <span class="tenue chico">Tus enganchados se guardan en</span>
+        <code id="lateral-ruta"></code>
+        <div class="fila-botones">
+          <button id="lateral-abrir" class="contorno">Abrir carpeta</button>
+          <button id="lateral-cambiar" class="contorno">Cambiar…</button>
+        </div>
+      </div>
+      <button id="lateral-ytdlp" class="texto ancho">Actualizar yt-dlp</button>
+    </div>
+  </aside>
+
   <main id="contenido">
 
     <!-- ================================================ bienvenida -->
@@ -63,6 +87,10 @@
       <div id="sin-tramos" class="vacio"></div>
 
       <div id="editor-tramo" hidden>
+        <!-- en pantallas anchas: lista de temas a la izquierda del editor -->
+        <ol id="lista-tramos" class="lista-tramos"></ol>
+
+        <div class="tramo-detalle">
         <div id="chips" class="chips"></div>
 
         <div class="cabecera-tema">
@@ -103,11 +131,16 @@
         </p>
 
         <button id="re-analizar" class="texto ancho">Re-analizar solo este</button>
+        </div>
       </div>
     </section>
 
     <!-- ===================================================== armar -->
     <section id="p-armar" class="panel">
+      <!-- En escritorio: controles a la izquierda, reproductor a la
+           derecha. En el celular, el orden de siempre. -->
+      <div class="armar-grid">
+      <div class="armar-mezcla">
       <div class="tarjeta">
         <strong id="armar-nombre"></strong>
         <span id="armar-info" class="tenue chico"></span>
@@ -119,6 +152,7 @@
       </label>
 
       <button id="btn-armar" class="primario ancho grande">Armar el enganchado</button>
+      </div>
 
       <div id="reproductor" class="tarjeta" hidden>
         <strong>Escuchar el resultado</strong>
@@ -142,6 +176,7 @@
         <a id="descargar-m4a" class="boton contorno ancho" download>Descargar m4a</a>
       </div>
 
+      <div class="armar-stems">
       <hr>
       <p class="tenue chico">
         Para ponerle un beat encima hace falta llevar los pedazos a un editor.
@@ -149,6 +184,8 @@
       </p>
       <button id="btn-stems" class="contorno ancho">Exportar stems + Reaper</button>
       <a id="descargar-zip" class="boton primario ancho" download hidden>Descargar ZIP</a>
+      </div>
+      </div>
     </section>
   </main>
 

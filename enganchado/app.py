@@ -113,7 +113,7 @@ def abrir_app() -> None:
         # de descarga y abre YouTube adentro en vez de en el navegador.
         webview.settings["ALLOW_DOWNLOADS"] = True
         webview.settings["OPEN_EXTERNAL_LINKS_IN_BROWSER"] = True
-        ventana = webview.create_window("Enganchados", url, width=560, height=900,
+        ventana = webview.create_window("Enganchados", url, width=1280, height=820,
                                         min_size=(380, 600), background_color="#14161A")
 
         def elegir_carpeta():

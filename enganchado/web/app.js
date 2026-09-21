@@ -166,7 +166,7 @@ $('#cerrar-log').onclick = () => $('#hoja-log').close()
 function refrescarBotones () {
   const t = estado.trabajando
   for (const id of ['#btn-bajar', '#btn-analizar', '#btn-armar', '#btn-stems',
-    '#re-analizar', '#actualizar-ytdlp']) {
+    '#re-analizar', '#actualizar-ytdlp', '#lateral-ytdlp']) {
     const b = $(id)
     if (b) b.disabled = t || b.dataset.deshabilitado === '1'
   }
@@ -221,6 +221,26 @@ function pintarListaSets () {
     li.querySelector('.borrar').onclick = (e) =>
       pedirConfirmacion(e.currentTarget, () => borrarSet(s.nombre), 'Borrar todo')
     ul.appendChild(li)
+  }
+
+  // Barra lateral de escritorio: la misma lista, siempre a la vista.
+  const lat = $('#lateral-sets')
+  lat.innerHTML = ''
+  for (const s of estado.sets) {
+    const li = document.createElement('li')
+    li.className = s.nombre === estado.set ? 'actual' : ''
+    li.innerHTML = `
+      <button class="abrir">
+        <span>${escapar(s.nombre)}</span>
+        <small>${s.descargados}/${s.en_lista} bajados${s.tiene_salida ? ' · armado' : ''}</small>
+      </button>
+      <button class="icono borrar" aria-label="Borrar">
+        <svg viewBox="0 0 24 24"><path d="M4 7h16M10 11v6M14 11v6M6 7l1 13h10l1-13M9 7V4h6v3"/></svg>
+      </button>`
+    li.querySelector('.abrir').onclick = () => abrirSet(s.nombre)
+    li.querySelector('.borrar').onclick = (e) =>
+      pedirConfirmacion(e.currentTarget, () => borrarSet(s.nombre), 'Borrar todo')
+    lat.appendChild(li)
   }
 
   const bl = $('#bienvenida-lista')
@@ -289,14 +309,22 @@ $('#form-nuevo-hoja').onsubmit = (e) => {
   $('#hoja-sets').close()
   crearSet(n)
 }
+$('#form-nuevo-lateral').onsubmit = (e) => {
+  e.preventDefault()
+  const n = $('#nombre-nuevo-lateral').value
+  $('#nombre-nuevo-lateral').value = ''
+  crearSet(n)
+}
 $('#abrir-sets').onclick = () => { pintarListaSets(); $('#hoja-sets').showModal() }
 $('#cerrar-sets').onclick = () => $('#hoja-sets').close()
-$('#actualizar-ytdlp').onclick = async () => {
+async function actualizarYtdlp () {
   $('#hoja-sets').close()
   if (await correrTarea('/api/actualizar-ytdlp', {}, 'Actualizando yt-dlp')) {
     avisar('yt-dlp al día')
   }
 }
+$('#actualizar-ytdlp').onclick = actualizarYtdlp
+$('#lateral-ytdlp').onclick = actualizarYtdlp
 
 // ================================================================ temas
 
@@ -332,6 +360,7 @@ function pintarFilas () {
           ${f.bajado && !f.analizado ? '<span class="tenue">sin analizar</span>' : ''}
         </div>
       </div>
+      <span class="fila-mb">${f.mb ? `${f.mb} MB` : ''}</span>
       <button class="icono subir" aria-label="Subir" ${f.pos === 1 ? 'disabled' : ''}>
         <svg viewBox="0 0 24 24"><path d="M6 15l6-6 6 6"/></svg></button>
       <button class="icono bajar" aria-label="Bajar" ${f.pos === ultimo ? 'disabled' : ''}>
@@ -580,6 +609,7 @@ let temporizadorGuardado
  * uno trabaria justo el gesto que mas importa que sea fluido.
  */
 function guardarRecetaPronto () {
+  refrescarLargoTramo()
   clearTimeout(temporizadorGuardado)
   temporizadorGuardado = setTimeout(() => {
     if (!estado.receta) return
@@ -635,7 +665,38 @@ function pintarTramos () {
     b.onclick = () => elegirTema(i)
     chips.appendChild(b)
   })
+  pintarListaTramos()
   cargarTema()
+}
+
+const segundos = (s) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, '0')}`
+
+// En escritorio, los temas con su tramo al lado del editor: ves el
+// enganchado entero y saltas a cualquiera de un click.
+function pintarListaTramos () {
+  const ol = $('#lista-tramos')
+  ol.innerHTML = ''
+  temas().forEach((t, i) => {
+    const li = document.createElement('li')
+    li.className = i === estado.indice ? 'activa' : ''
+    li.innerHTML = `
+      <span class="n">${String(i + 1).padStart(2, '0')}</span>
+      <div class="t">
+        <div>${escapar(t.titulo)}</div>
+        <small>${Math.round(t.bpm)} BPM</small>
+      </div>
+      <span class="largo">${segundos(t.fin - t.inicio)}</span>`
+    li.onclick = () => elegirTema(i)
+    ol.appendChild(li)
+  })
+  ol.children[estado.indice]?.scrollIntoView({ block: 'nearest' })
+}
+
+// Mientras arrastras el tramo, el largo de la lista acompania.
+function refrescarLargoTramo () {
+  const t = temas()[estado.indice]
+  const el = $('#lista-tramos').children[estado.indice]?.querySelector('.largo')
+  if (t && el) el.textContent = segundos(t.fin - t.inicio)
 }
 
 async function analizar (opciones, titulo) {
@@ -659,6 +720,9 @@ let aplicando = false   // candado: campos -> region -> campos se llamarian en c
 let modoTramo = true    // que se esta escuchando: el tramo o el tema entero
 let temaCargado = null
 
+const escritorio = matchMedia('(min-width: 1000px)')
+escritorio.addEventListener('change', () => ondas?.setOptions({ height: escritorio.matches ? 220 : 150 }))
+
 function crearOndas () {
   regiones = RegionsPlugin.create()
   ondas = WaveSurfer.create({
@@ -666,7 +730,7 @@ function crearOndas () {
     waveColor: '#3b4252',
     progressColor: '#5b647a',
     cursorColor: '#ffffff',
-    height: 150,
+    height: escritorio.matches ? 220 : 150,
     normalize: true,
     plugins: [regiones],
   })
@@ -992,6 +1056,12 @@ async function prepararModoApp () {
   $('#ruta-datos').textContent = carpeta.datos
   $('#cambiar-carpeta').hidden = !carpeta.puede_cambiar
   $('#cambiar-carpeta').onclick = cambiarCarpeta
+
+  $('#lateral-carpeta').hidden = false
+  $('#lateral-ruta').textContent = carpeta.datos
+  $('#lateral-abrir').onclick = mostrar('carpeta')
+  $('#lateral-cambiar').hidden = !carpeta.puede_cambiar
+  $('#lateral-cambiar').onclick = cambiarCarpeta
 }
 
 /**
