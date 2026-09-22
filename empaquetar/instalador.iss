@@ -65,6 +65,19 @@ begin
   Result := ExpandConstant('{userappdata}\Enganchados\config.json');
 end;
 
+// {userdocs} falla ("Failed to expand shell folder constant") cuando Windows
+// no sabe donde esta Documentos: por ejemplo si OneDrive se la llevo y
+// despues lo desinstalaron. Ahi se cae a la carpeta del usuario, que es
+// lo mismo que hace la app (rutas.py usa Path.home() / Documents).
+function CarpetaPorDefecto: String;
+begin
+  try
+    Result := ExpandConstant('{userdocs}\Enganchados');
+  except
+    Result := AddBackslash(GetEnv('USERPROFILE')) + 'Documents\Enganchados';
+  end;
+end;
+
 procedure InitializeWizard;
 begin
   PaginaDatos := CreateInputDirPage(wpSelectDir,
@@ -73,7 +86,7 @@ begin
     'Elegí la carpeta donde se van a guardar. Después la podés cambiar desde el menú de la app.',
     False, '');
   PaginaDatos.Add('');
-  PaginaDatos.Values[0] := ExpandConstant('{userdocs}\Enganchados');
+  PaginaDatos.Values[0] := CarpetaPorDefecto;
 end;
 
 function ShouldSkipPage(PageID: Integer): Boolean;
