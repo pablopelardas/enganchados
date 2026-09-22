@@ -138,6 +138,7 @@ class Almacen(private val raiz: File) {
         File(recetas, "$nombre.json").delete()
         File(audios, nombre).deleteRecursively()
         File(exportes, "$nombre.m4a").delete()
+        File(exportes, "$nombre.cruces").delete()
         File(exportes, "$nombre.zip").delete()
         File(exportes, nombre).deleteRecursively()   // carpeta de stems a medio armar
     }

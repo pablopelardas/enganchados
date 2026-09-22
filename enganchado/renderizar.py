@@ -15,7 +15,10 @@ import shutil
 import subprocess
 import sys
 import tempfile
+import wave
 from pathlib import Path
+
+import numpy as np
 
 for flujo in (sys.stdout, sys.stderr):
     try:
@@ -41,27 +44,110 @@ def ffmpeg(args):
                    check=True, **SIN_VENTANA)
 
 
+# Mismos valores que la app de Android (Union.kt): las dos tienen que
+# recortar igual el mismo tramo.
+UMBRAL_SILENCIO = 0.006   # RMS, ~ -44 dBFS
+VENTANA_S = 0.02
+MARGEN_S = 0.05
+
+
+def limites_sin_silencio(x, sr):
+    """(desde, hasta) en cuadros, sin el silencio de las puntas.
+
+    Muchos uploads de YouTube terminan con segundos mudos y otros arrancan
+    igual. Si el tramo llega hasta ahi, el cruce funde silencio con silencio
+    y en el medio del enganchado queda un hueco. Se deja un margen chico
+    para no morder el ataque de la primera nota.
+    """
+    cuadros = len(x)
+    ventana = max(1, int(sr * VENTANA_S))
+    margen = int(sr * MARGEN_S)
+    n = -(-cuadros // ventana)
+
+    v = x.astype(np.float32) / 32768
+    relleno = np.zeros((n * ventana - cuadros, x.shape[1]), dtype=np.float32)
+    energia = np.concatenate([v, relleno]).reshape(n, ventana * x.shape[1])
+    # el relleno de la ultima ventana no cuenta en el promedio
+    muestras = np.full(n, ventana * x.shape[1])
+    muestras[-1] = (cuadros - (n - 1) * ventana) * x.shape[1]
+    suenan = np.flatnonzero(np.sqrt((energia ** 2).sum(axis=1) / muestras) > UMBRAL_SILENCIO)
+
+    if len(suenan) == 0:
+        return 0, cuadros
+    desde = max(0, suenan[0] * ventana - margen)
+    hasta = min(cuadros, (suenan[-1] + 1) * ventana + margen)
+    return int(desde), int(hasta)
+
+
+def recortar_silencio(wav):
+    """Aplica limites_sin_silencio sobre un wav de 16 bits, en el lugar."""
+    with wave.open(str(wav), "rb") as f:
+        params = f.getparams()
+        x = np.frombuffer(f.readframes(params.nframes), dtype=np.int16)
+    x = x.reshape(-1, params.nchannels)
+    desde, hasta = limites_sin_silencio(x, params.framerate)
+    if (desde, hasta) == (0, len(x)):
+        return
+    with wave.open(str(wav), "wb") as f:
+        f.setparams(params)
+        f.writeframes(x[desde:hasta].tobytes())
+
+
+def largo_wav(wav):
+    with wave.open(str(wav), "rb") as f:
+        return f.getnframes() / f.getframerate()
+
+
+def cruce_efectivo(largos, crossfade):
+    """Nunca mas de la mitad del tramo mas corto: se lo comeria entero."""
+    return min(crossfade, min(largos) / 2)
+
+
+def cruces_de(largos, crossfade):
+    """Segundo donde empieza cada cruce, con los largos REALES de los tramos.
+
+    Antes se deducia de la receta (fin - inicio), pero un tramo que llega al
+    final del tema sale mas corto de lo pedido, y los saltos del reproductor
+    caian cada vez mas lejos de la transicion.
+    """
+    d = cruce_efectivo(largos, crossfade)
+    cruces, acumulado = [], largos[0]
+    for largo in largos[1:]:
+        cruces.append(acumulado - d)
+        acumulado += largo - d
+    return cruces
+
+
+def archivo_cruces(salida):
+    return salida.with_suffix(".cruces.json")
+
+
 def extraer(tema, destino, crossfade):
-    """Corta el tramo pedido, lo nivela y lo deja en wav.
+    """Corta el tramo pedido, le saca el silencio, lo nivela y lo deja en wav.
 
     Pide un poco mas de audio del que se ve: el cruce se come `crossfade`
     segundos en cada union, asi que sin ese colchon perderiamos el final
-    de cada tramo.
+    de cada tramo. Devuelve el largo real, que puede ser menor.
     """
     inicio = float(tema["inicio"])
     fin = min(float(tema["fin"]) + crossfade, float(tema["duracion_total"]))
     duracion = max(fin - inicio, 1.0)
+    crudo = destino.with_name(f"_crudo-{destino.name}")
 
+    # El silencio sale ANTES de nivelar: loudnorm levanta las partes bajas y
+    # el ruido de fondo de una cola muda dejaria de parecer silencio.
     ffmpeg([
         "-ss", f"{inicio:.3f}",
         "-t", f"{duracion:.3f}",
         "-i", str(RAIZ / tema["archivo"]),
         "-vn",
-        "-af", LOUDNORM,
-        "-ac", "2", "-ar", str(SR),
-        str(destino),
+        "-ac", "2", "-ar", str(SR), "-c:a", "pcm_s16le",
+        str(crudo),
     ])
-    return duracion
+    recortar_silencio(crudo)
+    ffmpeg(["-i", str(crudo), "-af", LOUDNORM, "-ar", str(SR), "-c:a", "pcm_s16le", str(destino)])
+    crudo.unlink()
+    return largo_wav(destino)
 
 
 def item_rpp(colocado, crossfade):
@@ -139,10 +225,10 @@ def mezclar(temas, salida, crossfade):
     tmp = Path(tempfile.mkdtemp(prefix="enganchado-"))
     try:
         print(f"Cortando y nivelando {len(temas)} tramos...")
-        partes = []
+        partes, largos = [], []
         for i, tema in enumerate(temas):
             parte = tmp / f"{i:02d}.wav"
-            extraer(tema, parte, crossfade)
+            largos.append(extraer(tema, parte, crossfade))
             partes.append(parte)
             print(f"  [{i+1:02d}/{len(temas)}] {tema['bpm']:>5.1f} BPM  {tema['titulo'][:50]}")
 
@@ -152,13 +238,16 @@ def mezclar(temas, salida, crossfade):
 
         # Cadena de cruces: cada acrossfade une el resultado anterior con
         # el tema siguiente, solapandolos. Por eso no quedan huecos.
+        # qsin es de igual potencia: el tri (lineal) deja un pozo de ~3 dB
+        # en el medio del cruce y se siente que la musica "se cae".
+        d = cruce_efectivo(largos, crossfade)
         filtros, previo = [], "[0:a]"
         for i in range(1, len(partes)):
             etiqueta = "[mix]" if i == len(partes) - 1 else f"[x{i}]"
-            filtros.append(f"{previo}[{i}:a]acrossfade=d={crossfade}:c1=tri:c2=tri{etiqueta}")
+            filtros.append(f"{previo}[{i}:a]acrossfade=d={d:.3f}:c1=qsin:c2=qsin{etiqueta}")
             previo = etiqueta
 
-        print(f"\nCruzando con {crossfade}s de solape...")
+        print(f"\nCruzando con {d:.1f}s de solape...")
         ffmpeg([
             *entradas,
             "-filter_complex", ";".join(filtros),
@@ -166,6 +255,9 @@ def mezclar(temas, salida, crossfade):
             "-c:a", "aac", "-b:a", "192k",
             str(salida),
         ])
+        # Donde quedo cada cruce, para que el reproductor salte ahi.
+        archivo_cruces(salida).write_text(json.dumps(cruces_de(largos, crossfade)), encoding="utf-8")
+        return sum(largos) - d * (len(largos) - 1)
     finally:
         shutil.rmtree(tmp, ignore_errors=True)
 
@@ -208,12 +300,7 @@ def main(argv=None):
         salida = salida.with_name(f"{salida.stem}-preview{salida.suffix}")
     salida.parent.mkdir(parents=True, exist_ok=True)
 
-    mezclar(temas, salida, crossfade)
-
-    # La duracion sale de la receta: cada union se come un cruce, pero el
-    # ultimo tramo conserva su cola. Sin ffprobe, que seria un binario mas
-    # para empaquetar solo para mostrar este numero.
-    minutos = (sum(t["fin"] - t["inicio"] for t in temas) + crossfade) / 60
+    minutos = mezclar(temas, salida, crossfade) / 60
     mb = salida.stat().st_size / 1024 / 1024
     print(f"\nListo: {salida.relative_to(RAIZ)}")
     print(f"       ~{minutos:.1f} min  |  {mb:.1f} MB")

@@ -338,7 +338,7 @@ def borrar_set(nombre: str, todo: bool = True):
         sacar(p)
     if todo:
         sacar(carpeta_musica(nombre))
-        for sufijo in (".m4a", "-preview.m4a", "-stems.zip", "-stems"):
+        for sufijo in (".m4a", ".cruces.json", "-preview.m4a", "-stems.zip", "-stems"):
             sacar(RAIZ / "salida" / f"{nombre}{sufijo}")
 
     if not borrados:
@@ -581,6 +581,17 @@ def audio_salida(nombre: str, descargar: bool = False):
     if descargar:
         return FileResponse(archivo, media_type="audio/mp4", filename=f"{nombre}.m4a")
     return FileResponse(archivo, media_type="audio/mp4")
+
+
+@app.get("/api/sets/{nombre}/cruces")
+def cruces_salida(nombre: str):
+    """Donde quedo cada cruce en la mezcla armada. null si es una mezcla de
+    antes de que se guardaran: la web cae a la cuenta desde la receta."""
+    validar(nombre)
+    archivo = RAIZ / "salida" / f"{nombre}.cruces.json"
+    if not archivo.exists():
+        return None
+    return json.loads(archivo.read_text(encoding="utf-8"))
 
 
 def armar_zip(nombre: str) -> Path:

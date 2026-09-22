@@ -264,7 +264,7 @@ async function abrirSet (nombre) {
   $('#tabs').hidden = false
   document.querySelectorAll('.panel').forEach((p) => p.classList.remove('activa'))
   await Promise.all([cargarFilas(), cargarReceta()])
-  estado.cruces = calcularCruces()
+  estado.cruces = await crucesReales()
   prepararReproductor()
   pintarListaSets()
   mostrarPanel(panelActual)
@@ -928,6 +928,16 @@ $('#cruce').oninput = (e) => {
  * menos su cola de cruce, asi que el tema siguiente entra exactamente cuando
  * termina el largo visible del anterior.
  */
+/**
+ * Donde quedo cada cruce: lo anota el render al armar la mezcla. La cuenta
+ * desde la receta queda solo para mezclas viejas, que no lo tienen.
+ */
+async function crucesReales () {
+  try {
+    return (await api(`/api/sets/${estado.set}/cruces`)) ?? calcularCruces()
+  } catch { return calcularCruces() }
+}
+
 function calcularCruces () {
   let t = 0
   return temas().slice(0, -1).map((x) => (t += x.fin - x.inicio))
@@ -938,12 +948,11 @@ $('#btn-armar').onclick = async () => {
   // Mientras se arma, el resultado viejo no se ofrece: el archivo se esta
   // sobreescribiendo, escucharlo o bajarlo daria algo a medio escribir.
   $('#reproductor').hidden = true
-  const cruces = calcularCruces()   // de la receta CON la que se mezcla
   const ok = await correrTarea(`/api/sets/${estado.set}/renderizar`,
     { crossfade: estado.receta?.crossfade_seg ?? 4 }, 'Armando')
   await cargarSets()
   if (ok) {
-    estado.cruces = cruces
+    estado.cruces = await crucesReales()
     prepararReproductor()
     avisar('Enganchado listo')
   }

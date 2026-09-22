@@ -50,46 +50,36 @@ object Mezcla {
         val cruceN = (enganchado.cruce * SR).toInt() * CANALES
         val temporal = File(destino.parentFile, "_mezcla.wav")
         val wav = WavStream(temporal, SR, CANALES)
-
-        var cola: FloatArray? = null
+        val cosedor = Union.Cosedor(cruceN, CANALES, wav::escribir)
 
         try {
             temas.forEachIndexed { i, tema ->
                 avance(i + 1, temas.size)
-
-                val seg = tramoDe(tema, almacen, enganchado.cruce)
-                if (seg.isEmpty()) return@forEachIndexed
-
-                val c = minOf(cruceN, seg.size / 2)
-
-                if (cola == null) {
-                    wav.escribir(seg, 0, maxOf(0, seg.size - c))
-                } else {
-                    // El cruce: la cola del anterior se funde con la
-                    // cabeza de este. De ahi que no queden huecos.
-                    val previo = cola!!
-                    val n = minOf(previo.size, c)
-                    val fundido = FloatArray(n)
-                    for (j in 0 until n) {
-                        val t = j.toFloat() / n
-                        fundido[j] = previo[j] * (1 - t) + seg[j] * t
-                    }
-                    wav.escribir(fundido, 0, n)
-                    wav.escribir(seg, n, maxOf(n, seg.size - c))
-                }
-
-                cola = if (seg.size > c) seg.copyOfRange(seg.size - c, seg.size) else null
+                cosedor.agregar(tramoDe(tema, almacen, enganchado.cruce))
             }
-
-            cola?.let { wav.escribir(it, 0, it.size) }
+            cosedor.cerrar()
         } finally {
             wav.cerrar()
         }
 
         aM4a(temporal, destino, codificando)
         temporal.delete()
+        guardarCruces(destino, cosedor.cruces.map { it.toDouble() / SR })
         destino
     }
+
+    /**
+     * Donde quedo cada cruce, al lado del m4a. Las flechas del reproductor
+     * saltan ahi: medido en la mezcla real, no deducido de la receta.
+     */
+    fun archivoCruces(m4a: File) = File(m4a.parentFile, m4a.nameWithoutExtension + ".cruces")
+
+    private fun guardarCruces(m4a: File, cruces: List<Double>) =
+        archivoCruces(m4a).writeText(cruces.joinToString("\n") { "%.3f".format(java.util.Locale.ROOT, it) })
+
+    /** null si la mezcla es de antes de que se guardaran los cruces. */
+    fun leerCruces(m4a: File): List<Double>? = archivoCruces(m4a).takeIf { it.exists() }
+        ?.readLines()?.mapNotNull { it.trim().toDoubleOrNull() }
 
     /** Corta el tramo del tema y lo deja nivelado, en estereo a 44.1k. */
     private fun tramoDe(tema: Tema, almacen: Almacen, cruce: Double): FloatArray {
@@ -121,7 +111,9 @@ object Mezcla {
             est[i * 2 + 1] = der
         }
 
-        val remuestreado = remuestrearEstereo(est, pcm.sampleRate, SR)
+        // Primero el silencio afuera: si quedara, ademas del hueco en el
+        // cruce, bajaria el RMS y el tramo se nivelaria mas fuerte de la cuenta.
+        val remuestreado = Union.recortarSilencio(remuestrearEstereo(est, pcm.sampleRate, SR), CANALES, SR)
         nivelar(remuestreado)
         return remuestreado
     }

@@ -111,7 +111,7 @@ class VistaModelo(app: Application) : AndroidViewModel(app) {
         soltarMezcla()
         resultadoMezcla = e?.let { File(almacen.exportes, "${it.nombre}.m4a") }?.takeIf { it.exists() }
         resultadoZip = e?.let { File(almacen.exportes, "${it.nombre}.zip") }?.takeIf { it.exists() }
-        crucesMezcla = e?.let { calcularCruces(it) } ?: emptyList()
+        crucesMezcla = e?.let { crucesDe(it, resultadoMezcla) } ?: emptyList()
     }
 
     fun guardar() { actual?.let { almacen.guardar(it) } }
@@ -473,10 +473,12 @@ class VistaModelo(app: Application) : AndroidViewModel(app) {
     var crucesMezcla by mutableStateOf(listOf<Double>()); private set
 
     /**
-     * Donde empieza cada transicion. Mezcla.renderizar escribe cada tramo
-     * menos su cola de cruce, asi que el tema siguiente entra exactamente
-     * cuando termina el largo visible del anterior.
+     * Donde empieza cada transicion. Lo que vale es lo que anoto la mezcla al
+     * armarse; la cuenta desde la receta queda solo para mezclas viejas.
      */
+    private fun crucesDe(e: Enganchado, m4a: File?): List<Double> =
+        m4a?.let(Mezcla::leerCruces) ?: calcularCruces(e)
+
     private fun calcularCruces(e: Enganchado): List<Double> {
         var t = 0.0
         return e.temas.filter { it.bajado && it.largo > 0.5 }
@@ -523,7 +525,13 @@ class VistaModelo(app: Application) : AndroidViewModel(app) {
         cargarMezcla()
         val mp = reproductorMezcla ?: return
         val s = segundo.coerceIn(0.0, durMezcla)
-        mp.seekTo((s * 1000).toInt())
+        // SEEK_CLOSEST: el seekTo comun puede caer en el cuadro clave anterior
+        // y el salto a un cruce quedaria corrido.
+        if (android.os.Build.VERSION.SDK_INT >= 26) {
+            mp.seekTo((s * 1000).toLong(), MediaPlayer.SEEK_CLOSEST)
+        } else {
+            mp.seekTo((s * 1000).toInt())
+        }
         posMezcla = s
     }
 
@@ -589,7 +597,7 @@ class VistaModelo(app: Application) : AndroidViewModel(app) {
                 resultadoMezcla = it
                 // los cruces salen de la receta CON la que se mezclo, no de la
                 // que quede si despues seguis tocando tramos
-                crucesMezcla = calcularCruces(e)
+                crucesMezcla = crucesDe(e, it)
                 cargarMezcla()
                 aviso = "Listo: ${it.name}"
             }.onFailure { aviso = "Fallo la mezcla: ${it.message}" }

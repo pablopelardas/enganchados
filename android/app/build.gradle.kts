@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -12,8 +14,8 @@ android {
         applicationId = "ar.enganchados"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2"
     }
 
     // youtubedl-android trae Python + yt-dlp + ffmpeg compilados para cada
@@ -32,8 +34,26 @@ android {
         }
     }
 
+    // La clave de firma vive fuera del repo (D:\Claves); keystore.properties,
+    // ignorado por git, dice donde esta y su contrasena. Tiene que ser SIEMPRE
+    // la misma: con otra, Android no deja instalar la version nueva encima.
+    val claves = rootProject.file("keystore.properties")
+    if (claves.exists()) {
+        val p = Properties()
+        claves.inputStream().use { p.load(it) }
+        signingConfigs {
+            create("release") {
+                storeFile = file(p.getProperty("storeFile"))
+                storePassword = p.getProperty("storePassword")
+                keyAlias = p.getProperty("keyAlias")
+                keyPassword = p.getProperty("keyPassword")
+            }
+        }
+    }
+
     buildTypes {
         release {
+            signingConfig = signingConfigs.findByName("release")
             isMinifyEnabled = false
         }
     }
@@ -84,6 +104,8 @@ dependencies {
     implementation("androidx.compose.material:material-icons-extended")
     implementation("androidx.compose.ui:ui-tooling-preview")
     debugImplementation("androidx.compose.ui:ui-tooling")
+
+    testImplementation("junit:junit:4.13.2")
 
     // miniaturas de los resultados de busqueda
     implementation("io.coil-kt:coil-compose:2.7.0")
